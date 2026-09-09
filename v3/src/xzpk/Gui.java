@@ -6,12 +6,18 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Toolkit;
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.List;
+import java.util.Locale;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -43,10 +49,12 @@ public final class Gui extends JFrame {
     private final JTextField windowField = new JTextField(4);
     private final JTextField topKField = new JTextField(5);
     private final JButton startButton = new JButton("开始扫描");
+    private final JButton exportButton = new JButton("导出为 TXT");
     private final JButton clearButton = new JButton("清空输出");
     private final JTextArea outputArea = new JTextArea();
     private final JLabel statusLabel = new JLabel("就绪");
     private SwingWorker<Void, String> worker;
+    private volatile ScanResult lastResult;
 
     public Gui() {
         super("XzPk V3 - 史莱姆区块扫描");
@@ -94,6 +102,7 @@ public final class Gui extends JFrame {
         JPanel bottom = new JPanel(new BorderLayout());
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 2));
         buttons.add(clearButton);
+        buttons.add(exportButton);
         buttons.add(startButton);
         bottom.add(statusLabel, BorderLayout.WEST);
         bottom.add(buttons, BorderLayout.EAST);
@@ -103,7 +112,9 @@ public final class Gui extends JFrame {
         add(bottom, BorderLayout.SOUTH);
 
         startButton.addActionListener(e -> onStart());
+        exportButton.addActionListener(e -> onExport());
         clearButton.addActionListener(e -> outputArea.setText(""));
+        exportButton.setEnabled(false); // 有结果后才可导出
     }
 
     private void onStart() {
@@ -121,7 +132,9 @@ public final class Gui extends JFrame {
         }
 
         outputArea.setText("");
+        lastResult = null;
         startButton.setEnabled(false);
+        exportButton.setEnabled(false);
         modeBox.setEnabled(false);
         unitBox.setEnabled(false);
         statusLabel.setText("计算中...");
@@ -166,6 +179,8 @@ public final class Gui extends JFrame {
                 modeBox.setEnabled(true);
                 unitBox.setEnabled(true);
                 if (result != null) {
+                    lastResult = result;
+                    exportButton.setEnabled(true);
                     statusLabel.setText("完成: 耗时 " + Output.formatMs(result.elapsedMs)
                             + ", 候选窗口 " + result.totalWindows + " 个");
                 }
@@ -173,6 +188,34 @@ public final class Gui extends JFrame {
             }
         };
         worker.execute();
+    }
+
+    /** 把最近一次扫描的报告导出为 TXT（选位置保存） */
+    private void onExport() {
+        ScanResult r = lastResult;
+        if (r == null) {
+            return;
+        }
+        JFileChooser fc = new JFileChooser();
+        fc.setDialogTitle("导出结果为 TXT");
+        fc.setSelectedFile(new File("史莱姆区块结果.txt"));
+        if (fc.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+        File file = fc.getSelectedFile();
+        if (!file.getName().toLowerCase(Locale.ROOT).endsWith(".txt")) {
+            file = new File(file.getParentFile(), file.getName() + ".txt");
+        }
+        try {
+            Files.write(file.toPath(), Output.reportText(r).getBytes(StandardCharsets.UTF_8));
+            String msg = "已导出到: " + file.getAbsolutePath();
+            append(msg + "\n");
+            statusLabel.setText(msg);
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this, "导出失败: " + ex.getMessage(), "导出 TXT",
+                    JOptionPane.ERROR_MESSAGE);
+            append("导出失败: " + ex.getMessage() + "\n");
+        }
     }
 
     /** 从输入框组装配置：范围按所选单位换算成区块后交给 Config.Builder */
