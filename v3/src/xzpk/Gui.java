@@ -58,7 +58,7 @@ public final class Gui extends JFrame {
         pack();
         Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
         setLocation((screen.width - getWidth()) / 2, Math.max(60, (screen.height - getHeight()) / 3));
-        windowField.setToolTipText("留空=按模式默认 (grid: 8, sliding: 12)");
+        windowField.setToolTipText("切换模式会自动填入默认值(grid=8, sliding=12), 可直接修改");
         unitBox.setToolTipText("范围/原点填什么单位: 方块坐标会按 ÷16 自动换算成区块");
     }
 
@@ -104,6 +104,16 @@ public final class Gui extends JFrame {
 
         startButton.addActionListener(e -> onStart());
         clearButton.addActionListener(e -> outputArea.setText(""));
+        // 模式切换时把该模式的默认窗口大小填进输入框(避免"留空隐藏默认"造成困惑)
+        modeBox.addActionListener(e -> fillWindowDefaultIfBlank());
+        fillWindowDefaultIfBlank();
+    }
+
+    /** 窗口大小留空时按当前模式填入默认值: grid=8, sliding=12 */
+    private void fillWindowDefaultIfBlank() {
+        if (windowField.getText().trim().isEmpty()) {
+            windowField.setText(modeBox.getSelectedIndex() == 1 ? "12" : "8");
+        }
     }
 
     private void onStart() {
