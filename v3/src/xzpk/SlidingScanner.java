@@ -11,7 +11,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * 滑动窗口扫描器（对应新版 skimepk2 思路）。
  *
  * <p>窗口起点覆盖范围内每一个可行位置（可按 skip 抽样），即能找到
- * “任意摆放”窗口下的最优位置，而不限于固定的铺格位置。</p>
+ * “任意摆放”窗口下的最优位置，而不限于固定的铺格位置。
+ * 窗口只要求左上角锚点区块在范围内，允许向右/向下<b>溢出</b>范围边缘。</p>
  *
  * <p>性能优化：
  * <ul>
@@ -35,10 +36,11 @@ public final class SlidingScanner {
     public static ScanResult scan(Config cfg) {
         int skip = cfg.skip();
         long w = cfg.windowSize();
+        // 溢出语义: 窗口只要求左上角锚点区块在范围内, 可向右/下越过范围边缘
         long sxLo = cfg.minChunkX();
-        long sxHi = cfg.maxChunkX() - w + 1L;
+        long sxHi = cfg.maxChunkX();
         long szLo = cfg.minChunkZ();
-        long szHi = cfg.maxChunkZ() - w + 1L;
+        long szHi = cfg.maxChunkZ();
 
         long nSx = (sxHi - sxLo) / skip + 1L;
         long nSz = (szHi - szLo) / skip + 1L;

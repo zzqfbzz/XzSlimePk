@@ -10,12 +10,12 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * 铺格(grid)扫描器（对应旧版 slimepk 思路）。
  *
- * <p>把扫描范围按 windowSize 铺成<b>互不重叠</b>的方块，窗口从范围的
- * <b>左上角(最小坐标)</b>开始：起点 = 范围最小坐标 + k×windowSize，
- * 只统计<b>完全落在</b>范围内的整块（尾部不足一块的丢弃）。
- * 例：范围区块 0~100、窗口 8 → 窗口 (0,0)~(7,7)、(8,0)~(15,7)…</p>
+ * <p>把窗口从范围左上角(最小坐标)起按 windowSize 铺成<b>互不重叠</b>的格子：
+ * 锚点 = 范围最小坐标 + k×windowSize，锚点在范围内即可，窗口可向右/向下
+ * <b>溢出</b>范围边缘（不足整块时也照常统计 8×8 的 64 格）。
+ * 例：范围区块 0~100、窗口 8 → 锚点 0,8,16,…,96，窗口 (0,0)~(7,7)、(8,0)~(15,7)…</p>
  *
- * <p>并行方式：把全部方块按批次动态分发给线程池里的 worker，
+ * <p>并行方式：把全部格子按批次动态分发给线程池里的 worker，
  * 每个 worker 用本地 Top-K 收集器，结束时再合并，降低锁竞争。</p>
  */
 public final class GridScanner {
@@ -36,16 +36,9 @@ public final class GridScanner {
         long minZ = cfg.minChunkZ();
         long maxZ = cfg.maxChunkZ();
 
-        long spanX = maxX - minX + 1L;
-        long spanZ = maxZ - minZ + 1L;
-        if (spanX < w || spanZ < w) {
-            throw new IllegalArgumentException("范围内放不下任何 " + w + "x" + w + " 的窗口:"
-                    + " 每个方向至少需要 " + w + " 个区块(" + (w * 16L) + " 格)宽"
-                    + "(当前范围 " + spanX + "x" + spanZ + " 区块)。请缩小 windowSize 或扩大扫描范围。");
-        }
-        // 从范围左上角起每隔 w 铺一个窗口; 只保留完全落在范围内的整块
-        long nX = (spanX - w) / w + 1L;
-        long nZ = (spanZ - w) / w + 1L;
+        // 溢出语义: 锚点在范围内即可, 窗口可向右/下越过 max, 尾块不丢弃
+        long nX = (maxX - minX) / w + 1L;
+        long nZ = (maxZ - minZ) / w + 1L;
         long total = Math.multiplyExact(nX, nZ);
 
         final int threads = cfg.effectiveThreads();

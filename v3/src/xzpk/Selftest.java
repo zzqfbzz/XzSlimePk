@@ -26,6 +26,7 @@ public final class Selftest {
             testCoordUnit();
             testGridVsBrute();
             testSlidingVsBrute();
+            testOverflow();
             testDeterminism();
         } catch (Throwable t) {
             System.err.println("自检失败: " + t.getMessage());
@@ -103,12 +104,12 @@ public final class Selftest {
                 "originX=0", "originZ=0", "showProgress=false");
         ScanResult scan = GridScanner.scan(cfg);
 
-        // 暴力对照: 窗口从范围左上角(最小坐标)起, 每隔 windowSize 铺一块, 只保留整块
+        // 暴力对照: 窗口从范围左上角(最小坐标)起, 每隔 windowSize 铺一块, 锚点在范围内即可(可溢出)
         List<ResultItem> brute = new ArrayList<>();
         long hits = 0;
         boolean firstTileFound = false;
-        for (long sx = -13; sx + 4 - 1 <= 12; sx += 4) {
-            for (long sz = -10; sz + 4 - 1 <= 15; sz += 4) {
+        for (long sx = -13; sx <= 12; sx += 4) {
+            for (long sz = -10; sz <= 15; sz += 4) {
                 int c = countBlock(999L, sx, sz, 4);
                 brute.add(ResultItem.of(c, (int) sx, (int) sz, 0, 0));
                 hits += c;
@@ -161,8 +162,8 @@ public final class Selftest {
 
         List<ResultItem> brute = new ArrayList<>();
         long hits = 0;
-        long sxHi = maxX - w + 1L;
-        long szHi = maxZ - w + 1L;
+        long sxHi = maxX; // 溢出语义: 锚点区块在范围内即可
+        long szHi = maxZ;
         for (long sx = minX; sx <= sxHi; sx += skip) {
             for (long sz = minZ; sz <= szHi; sz += skip) {
                 int c = countBlock(seed, sx, sz, w);
@@ -174,6 +175,33 @@ public final class Selftest {
                 name + " 窗口总数不符: " + scan.totalWindows + " vs " + brute.size());
         check(scan.slimeHits == hits, name + " 命中总数不符: " + scan.slimeHits + " vs " + hits);
         assertSameSets(name, scan, brute, brute);
+    }
+
+    // ================ 溢出语义 ================
+
+    private static void testOverflow() throws IOException {
+        // 方块 0~100 → 区块 0~6: sliding 每个区块都可作锚点, 窗口 8x8 向右/下溢出到范围外也照常统计
+        Config cfg = cfg("mode=sliding", "coordUnit=block",
+                "minChunkX=0", "maxChunkX=100",
+                "minChunkZ=0", "maxChunkZ=100",
+                "windowSize=8", "skip=1", "topK=100000", "threads=3",
+                "showProgress=false");
+        ScanResult scan = SlidingScanner.scan(cfg);
+        long seed = cfg.seed();
+
+        List<ResultItem> brute = new ArrayList<>();
+        long hits = 0;
+        for (long sx = 0; sx <= 6; sx++) {
+            for (long sz = 0; sz <= 6; sz++) {
+                int c = countBlock(seed, sx, sz, 8); // 允许数到锚点+7 的区块
+                brute.add(ResultItem.of(c, (int) sx, (int) sz, 0, 0));
+                hits += c;
+            }
+        }
+        check(scan.totalWindows == 49, "溢出: 窗口总数应为 49, 实际 " + scan.totalWindows);
+        check(scan.slimeHits == hits, "溢出: 命中总数不符");
+        assertSameSets("溢出", scan, brute, brute);
+        System.out.println("[OK] 溢出语义正确(方块0~100 → 7×7=49 个锚点窗口)");
     }
 
     // ================ 确定性 ================

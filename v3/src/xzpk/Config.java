@@ -327,12 +327,7 @@ public final class Config {
                 throw new IllegalArgumentException("windowSize 必须 >= 1 (当前: " + ws + ")");
             }
             if (mode == Mode.SLIDING) {
-                long width = maxChunkX - minChunkX + 1;
-                long height = maxChunkZ - minChunkZ + 1;
-                if (ws > width || ws > height) {
-                    throw new IllegalArgumentException("窗口 " + ws + "x" + ws
-                            + " 大于扫描范围 " + width + "x" + height + "，放不下任何窗口");
-                }
+                // 溢出语义: 窗口只要求左上角锚点区块在范围内, 允许越过范围边缘, 故不限制 ws 与范围宽度
                 if (skip < 1) {
                     throw new IllegalArgumentException("skip 必须 >= 1 (当前: " + skip + ")");
                 }
@@ -385,8 +380,9 @@ public final class Config {
             out.println("X 方向分片列数 bandCols: " + bandCols);
             out.println("原点(用于距离排序): 区块(" + originX + ", " + originZ + ")");
         } else {
-            out.println("对齐方式: 窗口从范围左上角起按 windowSize 铺互不重叠的格子, 只统计完整落在范围内的整块");
+            out.println("锚点规则: 从范围左上角起每隔 windowSize 铺一格(互不重叠)");
         }
+        out.println("溢出规则: 窗口只要求左上角锚点区块在范围内, 可向右/下越过范围边缘, 超出部分照常统计");
         out.println("输出条数 topK: " + topK + " (最多/最少各 " + topK + " 条)");
         out.println("线程数: " + effectiveThreads());
         out.println("进度条: " + showProgress);
