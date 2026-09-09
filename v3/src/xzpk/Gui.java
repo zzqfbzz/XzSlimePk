@@ -25,20 +25,24 @@ import javax.swing.SwingWorker;
 import javax.swing.text.DefaultCaret;
 
 /**
- * XzPk V3 图形界面（最基础版）：输入区 + 开始按钮 + 输出区。
+ * XzPk V3 图形界面：输入区 + 开始按钮 + 输出区。
  *
- * <p>扫描在后台线程执行（{@link SwingWorker}），不阻塞界面；
- * 输出直接复用命令行报告格式。运行：{@code java xzpk.Gui}</p>
+ * <p>范围坐标默认按<b>方块坐标</b>输入（游戏 F3 显示的那种），也可以切换成区块坐标；
+ * 扫描在后台线程执行，输出直接复用命令行报告格式（最多/最少各 topK 条）。</p>
  */
 public final class Gui extends JFrame {
 
+    private static final long DEFAULT_RANGE_BLOCK = 9600L; // = ±600 区块
+
     private final JComboBox<String> modeBox =
             new JComboBox<>(new String[]{"grid(对齐网格)", "sliding(滑动窗口)"});
+    private final JComboBox<String> unitBox =
+            new JComboBox<>(new String[]{"方块坐标(游戏F3)", "区块坐标"});
     private final JTextField seedField = new JTextField(String.valueOf(Config.DEFAULT_SEED), 24);
-    private final JTextField minXField = new JTextField("-600", 7);
-    private final JTextField maxXField = new JTextField("600", 7);
-    private final JTextField minZField = new JTextField("-600", 7);
-    private final JTextField maxZField = new JTextField("600", 7);
+    private final JTextField minXField = new JTextField(String.valueOf(-DEFAULT_RANGE_BLOCK), 8);
+    private final JTextField maxXField = new JTextField(String.valueOf(DEFAULT_RANGE_BLOCK), 8);
+    private final JTextField minZField = new JTextField(String.valueOf(-DEFAULT_RANGE_BLOCK), 8);
+    private final JTextField maxZField = new JTextField(String.valueOf(DEFAULT_RANGE_BLOCK), 8);
     private final JTextField windowField = new JTextField(4);
     private final JTextField topKField = new JTextField("50", 5);
     private final JButton startButton = new JButton("开始扫描");
@@ -55,6 +59,7 @@ public final class Gui extends JFrame {
         Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
         setLocation((screen.width - getWidth()) / 2, Math.max(60, (screen.height - getHeight()) / 3));
         windowField.setToolTipText("留空=按模式默认 (grid: 8, sliding: 12)");
+        unitBox.setToolTipText("范围/原点填什么单位: 方块坐标会按 ÷16 自动换算成区块");
     }
 
     private void buildUi() {
@@ -64,12 +69,15 @@ public final class Gui extends JFrame {
         inputs.setBorder(BorderFactory.createEmptyBorder(8, 8, 4, 8));
 
         inputs.add(flowRow(new JLabel("计算模式:"), modeBox,
+                new JLabel("  坐标单位:"), unitBox,
                 new JLabel("    世界种子:"), seedField));
-        inputs.add(flowRow(new JLabel("区块 X 范围(含端点):"), minXField, new JLabel(" ~ "), maxXField,
-                new JLabel("     区块 Z 范围:"), minZField, new JLabel(" ~ "), maxZField));
+        inputs.add(flowRow(new JLabel("X 范围: "), minXField, new JLabel(" ~ "), maxXField,
+                new JLabel("     Z 范围: "), minZField, new JLabel(" ~ "), maxZField));
         inputs.add(flowRow(new JLabel("窗口大小(区块):"), windowField,
                 new JLabel("  输出条数 topK:"), topKField));
-        inputs.add(flowRow(makeHint("提示: 留空窗口大小=按模式默认; 并列按距原点(0,0)近→远排序; 范围/窗口/种子为区块相关数值")));
+        inputs.add(flowRow(makeHint(
+                "用法: 在\"大范围\"里找 8×8 区块(=128×128格) 的史莱姆区块最多/最少的小区域。"
+                        + "范围按所选单位填, 窗口大小永远填区块数(如 8); 输出里 X,Z=起点区块, x,z=起点世界方块坐标")));
 
         // ---- 输出区 ----
         outputArea.setEditable(false);
@@ -78,7 +86,7 @@ public final class Gui extends JFrame {
         DefaultCaret caret = (DefaultCaret) outputArea.getCaret();
         caret.setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
         JScrollPane scroll = new JScrollPane(outputArea);
-        scroll.setPreferredSize(new Dimension(820, 430));
+        scroll.setPreferredSize(new Dimension(860, 430));
         outputArea.append("输入参数后点击\"开始扫描\"。输出每行格式:\n"
                 + "  数量|x,z=世界方块坐标|X,Z=起点区块坐标|WxW|占比\n\n");
 
@@ -115,6 +123,7 @@ public final class Gui extends JFrame {
         outputArea.setText("");
         startButton.setEnabled(false);
         modeBox.setEnabled(false);
+        unitBox.setEnabled(false);
         statusLabel.setText("计算中...");
 
         worker = new SwingWorker<Void, String>() {
@@ -124,9 +133,10 @@ public final class Gui extends JFrame {
             protected Void doInBackground() {
                 publish("== 开始扫描 ==\n"
                         + "模式: " + (cfg.mode() == Config.Mode.GRID ? "grid(对齐网格)" : "sliding(滑动窗口)")
+                        + " | 坐标单位: " + (cfg.coordUnit() == Config.CoordUnit.BLOCK ? "方块" : "区块")
                         + " | 种子: " + cfg.seed()
-                        + " | 窗口: " + cfg.windowSize() + "x" + cfg.windowSize()
-                        + " | 范围 X[" + cfg.minChunkX() + "," + cfg.maxChunkX()
+                        + " | 窗口: " + cfg.windowSize() + "x" + cfg.windowSize() + " 区块"
+                        + " | 换算后范围(区块) X[" + cfg.minChunkX() + "," + cfg.maxChunkX()
                         + "] Z[" + cfg.minChunkZ() + "," + cfg.maxChunkZ() + "]\n");
                 ScanResult r = cfg.mode() == Config.Mode.GRID
                         ? GridScanner.scan(cfg)
@@ -154,6 +164,7 @@ public final class Gui extends JFrame {
                 }
                 startButton.setEnabled(true);
                 modeBox.setEnabled(true);
+                unitBox.setEnabled(true);
                 if (result != null) {
                     statusLabel.setText("完成: 耗时 " + Output.formatMs(result.elapsedMs)
                             + ", 候选窗口 " + result.totalWindows + " 个");
@@ -164,22 +175,41 @@ public final class Gui extends JFrame {
         worker.execute();
     }
 
-    /** 从输入框组装配置（坐标/窗口/topK 用整数, 种子用长整数） */
+    /** 从输入框组装配置：范围按所选单位换算成区块后交给 Config.Builder */
     private Config readConfig() {
+        boolean block = unitBox.getSelectedIndex() == 0; // 0=方块, 1=区块
+
+        long rawMinX = parseLong(minXField, "X 范围最小值");
+        long rawMaxX = parseLong(maxXField, "X 范围最大值");
+        long rawMinZ = parseLong(minZField, "Z 范围最小值");
+        long rawMaxZ = parseLong(maxZField, "Z 范围最大值");
+        if (rawMinX > rawMaxX) {
+            throw new IllegalArgumentException("X 范围非法: 最小值 " + rawMinX + " 不能大于最大值 " + rawMaxX);
+        }
+        if (rawMinZ > rawMaxZ) {
+            throw new IllegalArgumentException("Z 范围非法: 最小值 " + rawMinZ + " 不能大于最大值 " + rawMaxZ);
+        }
+
+        long minX = block ? Config.chunkFromBlock(rawMinX) : rawMinX;
+        long maxX = block ? Config.chunkFromBlock(rawMaxX) : rawMaxX;
+        long minZ = block ? Config.chunkFromBlock(rawMinZ) : rawMinZ;
+        long maxZ = block ? Config.chunkFromBlock(rawMaxZ) : rawMaxZ;
+
         Config.Builder b = new Config.Builder()
                 .mode(modeBox.getSelectedIndex() == 1 ? Config.Mode.SLIDING : Config.Mode.GRID)
+                .coordUnit(block ? Config.CoordUnit.BLOCK : Config.CoordUnit.CHUNK)
                 .seed(parseLong(seedField, "世界种子"))
-                .minChunkX(parseInt(minXField, "区块 X 最小值"))
-                .maxChunkX(parseInt(maxXField, "区块 X 最大值"))
-                .minChunkZ(parseInt(minZField, "区块 Z 最小值"))
-                .maxChunkZ(parseInt(maxZField, "区块 Z 最大值"))
-                .topK(parseInt(topKField, "输出条数"))
+                .minChunkX(minX)
+                .maxChunkX(maxX)
+                .minChunkZ(minZ)
+                .maxChunkZ(maxZ)
+                .topK((int) parseLong(topKField, "输出条数"))
                 .showProgress(false)
                 .outFile("")
                 .source(Paths.get("(GUI 输入)"));
         String ws = windowField.getText().trim();
         if (!ws.isEmpty()) {
-            b.windowSize(parseInt(windowField, "窗口大小"));
+            b.windowSize((int) parseLong(windowField, "窗口大小"));
         }
         return b.build();
     }
@@ -194,14 +224,6 @@ public final class Gui extends JFrame {
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException(name + " 不是合法整数: \"" + text + "\"");
         }
-    }
-
-    private static int parseInt(JTextField f, String name) {
-        long v = parseLong(f, name);
-        if (v < Integer.MIN_VALUE || v > Integer.MAX_VALUE) {
-            throw new IllegalArgumentException(name + " 超出整数范围: " + v);
-        }
-        return (int) v;
     }
 
     private void append(String text) {

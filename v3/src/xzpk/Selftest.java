@@ -23,6 +23,7 @@ public final class Selftest {
         System.out.println("XzPk V3 自检开始...");
         try {
             testFormulaParity();
+            testCoordUnit();
             testGridVsBrute();
             testSlidingVsBrute();
             testDeterminism();
@@ -56,6 +57,39 @@ public final class Selftest {
             }
         }
         System.out.println("[OK] 公式与旧版一致");
+    }
+
+    // ================ 坐标单位换算 ================
+
+    private static void testCoordUnit() throws IOException {
+        // 方块 → 区块换算边界(负数向下取整)
+        long[][] cases = {
+                {-1, -1}, {0, 0}, {15, 0}, {16, 1}, {-16, -1}, {-100, -7}, {100, 6}, {-9600, -600}
+        };
+        for (long[] c : cases) {
+            check(Config.chunkFromBlock(c[0]) == c[1],
+                    "方块→区块换算错误: " + c[0] + " 应为 " + c[1] + ", 得到 " + Config.chunkFromBlock(c[0]));
+        }
+        // 配置文件中 coordUnit=block 时, 范围自动换算成区块
+        try {
+            Config cfg = cfg("mode=sliding",
+                    "coordUnit=block",
+                    "minChunkX=-100", "maxChunkX=100",
+                    "minChunkZ=-100", "maxChunkZ=100",
+                    "windowSize=8", "skip=1", "topK=10",
+                    "showProgress=false");
+            check(cfg.coordUnit() == Config.CoordUnit.BLOCK, "coordUnit 未生效");
+            check(cfg.minChunkX() == -7 && cfg.maxChunkX() == 6, "block X 范围换算错误: "
+                    + cfg.minChunkX() + "~" + cfg.maxChunkX());
+            check(cfg.minChunkZ() == -7 && cfg.maxChunkZ() == 6, "block Z 范围换算错误: "
+                    + cfg.minChunkZ() + "~" + cfg.maxChunkZ());
+            // 该换算结果可直接滑动扫描(8×8 能放下)
+            ScanResult r = SlidingScanner.scan(cfg);
+            check(r.totalWindows > 0, "block 范围扫描无窗口");
+        } catch (IllegalArgumentException e) {
+            throw new AssertionError("coordUnit=block 配置失败: " + e.getMessage());
+        }
+        System.out.println("[OK] 坐标单位换算正确");
     }
 
     // ================ 暴力对照 ================

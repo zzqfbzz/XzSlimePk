@@ -29,10 +29,24 @@ public final class Config {
         SLIDING
     }
 
+    /** 范围(及原点)坐标的输入单位 */
+    public enum CoordUnit {
+        /** 区块坐标 */
+        CHUNK,
+        /** 方块坐标（游戏 F3 显示的坐标），内部自动 ÷16 换算成区块 */
+        BLOCK
+    }
+
     /** 与旧版一致的默认世界种子 */
     public static final long DEFAULT_SEED = 2950649267509295309L;
 
+    /** 方块坐标 → 所在区块坐标（向下取整，负数也正确） */
+    public static long chunkFromBlock(long block) {
+        return Math.floorDiv(block, 16L);
+    }
+
     private final Mode mode;
+    private final CoordUnit coordUnit;
     private final long seed;
     private final long minChunkX;
     private final long maxChunkX;
@@ -49,11 +63,12 @@ public final class Config {
     private final boolean showProgress;
     private final Path source;
 
-    private Config(Mode mode, long seed, long minChunkX, long maxChunkX,
+    private Config(Mode mode, CoordUnit coordUnit, long seed, long minChunkX, long maxChunkX,
                    long minChunkZ, long maxChunkZ, int windowSize, int skip,
                    int bandCols, int topK, long originX, long originZ,
                    int threads, String outFile, boolean showProgress, Path source) {
         this.mode = mode;
+        this.coordUnit = coordUnit;
         this.seed = seed;
         this.minChunkX = minChunkX;
         this.maxChunkX = maxChunkX;
@@ -101,21 +116,40 @@ public final class Config {
             throw new IllegalArgumentException("配置项 mode 无效: \"" + modeRaw + "\" (可选: grid / sliding)");
         }
 
+        // ---- 世界种子 ----
         if (p.containsKey("seed")) {
             b.seed(parseLong("seed", p.getProperty("seed").trim()));
         }
-        if (p.containsKey("minChunkX")) {
-            b.minChunkX(parseInt("minChunkX", p.getProperty("minChunkX").trim()));
+
+        // ---- 坐标输入单位 (默认: 区块) ----
+        String unitRaw = p.getProperty("coordUnit", "chunk").trim().toLowerCase();
+        CoordUnit unit;
+        if (unitRaw.equals("chunk")) {
+            unit = CoordUnit.CHUNK;
+        } else if (unitRaw.equals("block") || unitRaw.equals("blocks")) {
+            unit = CoordUnit.BLOCK;
+        } else {
+            throw new IllegalArgumentException(
+                    "配置项 coordUnit 无效: \"" + unitRaw + "\" (可选: chunk / block)");
         }
-        if (p.containsKey("maxChunkX")) {
-            b.maxChunkX(parseInt("maxChunkX", p.getProperty("maxChunkX").trim()));
+        b.coordUnit(unit);
+
+        // ---- 范围(按所选单位解析, block 时 ÷16 换算成区块) ----
+        long rawMinX = p.containsKey("minChunkX") ? parseInt("minChunkX", p.getProperty("minChunkX").trim()) : -600;
+        long rawMaxX = p.containsKey("maxChunkX") ? parseInt("maxChunkX", p.getProperty("maxChunkX").trim()) : 600;
+        long rawMinZ = p.containsKey("minChunkZ") ? parseInt("minChunkZ", p.getProperty("minChunkZ").trim()) : -600;
+        long rawMaxZ = p.containsKey("maxChunkZ") ? parseInt("maxChunkZ", p.getProperty("maxChunkZ").trim()) : 600;
+        if (rawMinX > rawMaxX) {
+            throw new IllegalArgumentException("范围非法: minChunkX(" + rawMinX + ") 不能大于 maxChunkX(" + rawMaxX + ")");
         }
-        if (p.containsKey("minChunkZ")) {
-            b.minChunkZ(parseInt("minChunkZ", p.getProperty("minChunkZ").trim()));
+        if (rawMinZ > rawMaxZ) {
+            throw new IllegalArgumentException("范围非法: minChunkZ(" + rawMinZ + ") 不能大于 maxChunkZ(" + rawMaxZ + ")");
         }
-        if (p.containsKey("maxChunkZ")) {
-            b.maxChunkZ(parseInt("maxChunkZ", p.getProperty("maxChunkZ").trim()));
-        }
+        long minX = unit == CoordUnit.BLOCK ? chunkFromBlock(rawMinX) : rawMinX;
+        long maxX = unit == CoordUnit.BLOCK ? chunkFromBlock(rawMaxX) : rawMaxX;
+        long minZ = unit == CoordUnit.BLOCK ? chunkFromBlock(rawMinZ) : rawMinZ;
+        long maxZ = unit == CoordUnit.BLOCK ? chunkFromBlock(rawMaxZ) : rawMaxZ;
+        b.minChunkX(minX).maxChunkX(maxX).minChunkZ(minZ).maxChunkZ(maxZ);
         // windowSize 缺省: 由 build() 按模式自动决定(grid=8 / sliding=12)
         if (p.containsKey("windowSize")) {
             b.windowSize(parseInt("windowSize", p.getProperty("windowSize").trim()));
@@ -130,10 +164,12 @@ public final class Config {
             b.topK(parseInt("topK", p.getProperty("topK").trim()));
         }
         if (p.containsKey("originX")) {
-            b.originX(parseInt("originX", p.getProperty("originX").trim()));
+            long raw = parseInt("originX", p.getProperty("originX").trim());
+            b.originX(unit == CoordUnit.BLOCK ? chunkFromBlock(raw) : raw);
         }
         if (p.containsKey("originZ")) {
-            b.originZ(parseInt("originZ", p.getProperty("originZ").trim()));
+            long raw = parseInt("originZ", p.getProperty("originZ").trim());
+            b.originZ(unit == CoordUnit.BLOCK ? chunkFromBlock(raw) : raw);
         }
         if (p.containsKey("threads")) {
             b.threads(parseInt("threads", p.getProperty("threads").trim()));
@@ -167,6 +203,7 @@ public final class Config {
      */
     public static final class Builder {
         private Mode mode;
+        private CoordUnit coordUnit = CoordUnit.CHUNK;
         private long seed = DEFAULT_SEED;
         private long minChunkX = -600;
         private long maxChunkX = 600;
@@ -185,6 +222,12 @@ public final class Config {
 
         public Builder mode(Mode mode) {
             this.mode = mode;
+            return this;
+        }
+
+        /** 范围/原点坐标的输入单位(默认区块; 方块时由调用方自行换算, 此字段仅记录单位) */
+        public Builder coordUnit(CoordUnit v) {
+            this.coordUnit = v == null ? CoordUnit.CHUNK : v;
             return this;
         }
 
@@ -307,8 +350,15 @@ public final class Config {
             if (ws > 1_000_000) {
                 throw new IllegalArgumentException("windowSize 过大: " + ws);
             }
+            final long MAX_CHUNK = 2_000_000_000L;
+            if (Math.abs(minChunkX) > MAX_CHUNK || Math.abs(maxChunkX) > MAX_CHUNK
+                    || Math.abs(minChunkZ) > MAX_CHUNK || Math.abs(maxChunkZ) > MAX_CHUNK
+                    || Math.abs(originX) > MAX_CHUNK || Math.abs(originZ) > MAX_CHUNK) {
+                throw new IllegalArgumentException(
+                        "区块坐标超出支持范围(±" + MAX_CHUNK + "): 请检查输入的范围/原点");
+            }
 
-            return new Config(mode, seed, minChunkX, maxChunkX, minChunkZ, maxChunkZ,
+            return new Config(mode, coordUnit, seed, minChunkX, maxChunkX, minChunkZ, maxChunkZ,
                     ws, skip, bandCols, topK, originX, originZ, threads, outFile,
                     showProgress, source);
         }
@@ -325,8 +375,11 @@ public final class Config {
         out.println("模式: " + modeName);
         out.println("世界种子: " + seed);
         out.println("窗口大小: " + windowSize + "x" + windowSize + " 区块");
+        out.println("坐标输入单位: " + (coordUnit == CoordUnit.BLOCK ? "block(方块坐标, 已自动÷16换算)" : "chunk(区块坐标)"));
         out.println("扫描范围(区块,含端点): X[" + minChunkX + ", " + maxChunkX
                 + "] Z[" + minChunkZ + ", " + maxChunkZ + "]");
+        out.println("扫描范围(世界方块): X[" + (minChunkX * 16L) + ", " + ((maxChunkX + 1) * 16L - 1)
+                + "] Z[" + (minChunkZ * 16L) + ", " + ((maxChunkZ + 1) * 16L - 1) + "]");
         if (mode == Mode.SLIDING) {
             out.println("滑动步长 skip: " + skip + (skip == 1 ? "(全覆盖)" : ""));
             out.println("X 方向分片列数 bandCols: " + bandCols);
@@ -342,6 +395,7 @@ public final class Config {
 
     // ---- getters ----
     public Mode mode() { return mode; }
+    public CoordUnit coordUnit() { return coordUnit; }
     public long seed() { return seed; }
     public long minChunkX() { return minChunkX; }
     public long maxChunkX() { return maxChunkX; }
