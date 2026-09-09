@@ -6,18 +6,17 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Toolkit;
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
-import java.util.Locale;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
-import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -115,6 +114,7 @@ public final class Gui extends JFrame {
         exportButton.addActionListener(e -> onExport());
         clearButton.addActionListener(e -> outputArea.setText(""));
         exportButton.setEnabled(false); // 有结果后才可导出
+        exportButton.setToolTipText("保存到程序当前目录, 文件名含种子(UTF-8)");
     }
 
     private void onStart() {
@@ -190,25 +190,31 @@ public final class Gui extends JFrame {
         worker.execute();
     }
 
-    /** 把最近一次扫描的报告导出为 TXT（选位置保存） */
+    /** 把最近一次扫描的结果导出为 TXT：直接保存到程序当前目录，文件名含种子 */
     private void onExport() {
         ScanResult r = lastResult;
         if (r == null) {
             return;
         }
-        JFileChooser fc = new JFileChooser();
-        fc.setDialogTitle("导出结果为 TXT");
-        fc.setSelectedFile(new File("史莱姆区块结果.txt"));
-        if (fc.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
-            return;
-        }
-        File file = fc.getSelectedFile();
-        if (!file.getName().toLowerCase(Locale.ROOT).endsWith(".txt")) {
-            file = new File(file.getParentFile(), file.getName() + ".txt");
-        }
+        Config cfg = r.config;
+        String fileName = "史莱姆区块结果_种子" + cfg.seed() + ".txt";
+        Path out = Paths.get(fileName).toAbsolutePath();
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("世界种子 = ").append(cfg.seed()).append('\n');
+        sb.append("计算模式 = ").append(cfg.mode() == Config.Mode.GRID ? "grid(从角点铺格)" : "sliding(滑动窗口)")
+                .append(" | 窗口 = ").append(cfg.windowSize()).append('x').append(cfg.windowSize())
+                .append(" 区块 | 坐标单位 = ")
+                .append(cfg.coordUnit() == Config.CoordUnit.BLOCK ? "方块(自动÷16)" : "区块")
+                .append('\n');
+        sb.append("换算后范围(区块) X[").append(cfg.minChunkX()).append(',').append(cfg.maxChunkX())
+                .append("] Z[").append(cfg.minChunkZ()).append(',').append(cfg.maxChunkZ())
+                .append("]  (每行: 数量|x,z=方块坐标|X,Z=区块坐标|WxW|占比)\n\n");
+        sb.append(Output.reportText(r));
+
         try {
-            Files.write(file.toPath(), Output.reportText(r).getBytes(StandardCharsets.UTF_8));
-            String msg = "已导出到: " + file.getAbsolutePath();
+            Files.write(out, sb.toString().getBytes(StandardCharsets.UTF_8));
+            String msg = "已导出到: " + out;
             append(msg + "\n");
             statusLabel.setText(msg);
         } catch (IOException ex) {
