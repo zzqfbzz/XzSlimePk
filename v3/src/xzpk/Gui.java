@@ -6,7 +6,6 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Toolkit;
-import java.nio.file.Paths;
 import java.util.List;
 
 import javax.swing.BorderFactory;
@@ -32,19 +31,17 @@ import javax.swing.text.DefaultCaret;
  */
 public final class Gui extends JFrame {
 
-    private static final long DEFAULT_RANGE_BLOCK = 9600L; // = ±600 区块
-
     private final JComboBox<String> modeBox =
             new JComboBox<>(new String[]{"sliding(滑动窗口, 推荐)", "grid(从角点铺格)"});
     private final JComboBox<String> unitBox =
             new JComboBox<>(new String[]{"方块坐标(游戏F3)", "区块坐标"});
-    private final JTextField seedField = new JTextField(String.valueOf(Config.DEFAULT_SEED), 24);
-    private final JTextField minXField = new JTextField(String.valueOf(-DEFAULT_RANGE_BLOCK), 8);
-    private final JTextField maxXField = new JTextField(String.valueOf(DEFAULT_RANGE_BLOCK), 8);
-    private final JTextField minZField = new JTextField(String.valueOf(-DEFAULT_RANGE_BLOCK), 8);
-    private final JTextField maxZField = new JTextField(String.valueOf(DEFAULT_RANGE_BLOCK), 8);
+    private final JTextField seedField = new JTextField(26);
+    private final JTextField minXField = new JTextField(9);
+    private final JTextField maxXField = new JTextField(9);
+    private final JTextField minZField = new JTextField(9);
+    private final JTextField maxZField = new JTextField(9);
     private final JTextField windowField = new JTextField(4);
-    private final JTextField topKField = new JTextField("100", 5);
+    private final JTextField topKField = new JTextField(5);
     private final JButton startButton = new JButton("开始扫描");
     private final JButton clearButton = new JButton("清空输出");
     private final JTextArea outputArea = new JTextArea();
@@ -58,8 +55,10 @@ public final class Gui extends JFrame {
         pack();
         Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
         setLocation((screen.width - getWidth()) / 2, Math.max(60, (screen.height - getHeight()) / 3));
-        windowField.setToolTipText("默认 8(单个玩家加载上限), 可直接修改");
+        windowField.setToolTipText("必填: 区块数, 如 8(单个玩家加载上限, =128×128格)");
         unitBox.setToolTipText("范围/原点填什么单位: 方块坐标会按 ÷16 自动换算成区块");
+        seedField.setToolTipText("游戏里 /seed 显示的世界种子");
+        topKField.setToolTipText("最多/最少各保留多少条, 如 100");
     }
 
     private void buildUi() {
@@ -77,9 +76,8 @@ public final class Gui extends JFrame {
         inputs.add(flowRow(new JLabel("窗口大小(区块):"), windowField,
                 new JLabel("  输出条数 topK:"), topKField));
         inputs.add(flowRow(makeHint(
-                "推荐 sliding(窗口可任意摆放找最优); grid 从范围左上角起铺互不重叠的格子"
-                        + "(输入 0,0 则第一块就是 0,0~7,7)。窗口大小填区块数, 如 8(=128×128格); "
-                        + "输出 X,Z=起点区块, x,z=起点方块坐标")));
+                "所有参数都需手动填写。推荐 sliding(任意摆放找最优); 种子=游戏 /seed; 范围填两个角点"
+                        + "坐标(单位按上方选择); 窗口大小填区块数(8=128×128格); topK=各保留条数")));
 
         // ---- 输出区 ----
         outputArea.setEditable(false);
@@ -106,16 +104,6 @@ public final class Gui extends JFrame {
 
         startButton.addActionListener(e -> onStart());
         clearButton.addActionListener(e -> outputArea.setText(""));
-        // 模式切换时把该模式的默认窗口大小填进输入框(避免"留空隐藏默认"造成困惑)
-        modeBox.addActionListener(e -> fillWindowDefaultIfBlank());
-        fillWindowDefaultIfBlank();
-    }
-
-    /** 窗口大小留空时填入默认值 8(单个玩家加载的最大区域) */
-    private void fillWindowDefaultIfBlank() {
-        if (windowField.getText().trim().isEmpty()) {
-            windowField.setText("8");
-        }
     }
 
     private void onStart() {
@@ -216,13 +204,9 @@ public final class Gui extends JFrame {
                 .minChunkZ(minZ)
                 .maxChunkZ(maxZ)
                 .topK((int) parseLong(topKField, "输出条数"))
+                .windowSize((int) parseLong(windowField, "窗口大小"))
                 .showProgress(false)
-                .outFile("")
-                .source(Paths.get("(GUI 输入)"));
-        String ws = windowField.getText().trim();
-        if (!ws.isEmpty()) {
-            b.windowSize((int) parseLong(windowField, "窗口大小"));
-        }
+                .outFile("");
         return b.build();
     }
 

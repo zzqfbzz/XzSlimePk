@@ -1,17 +1,14 @@
 package xzpk;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
+import java.util.Properties;
 import java.util.Random;
 
 /**
  * 无框架自检程序：用“暴力直接数”的方式交叉验证 grid / sliding 两种扫描器，
- * 并验证 V3 判定公式与旧版一致、结果确定性。
+ * 并验证 V3 判定公式与 Minecraft 官方写法一致、结果确定性。
  *
  * <p>运行：{@code java xzpk.Selftest}</p>
  */
@@ -293,19 +290,19 @@ public final class Selftest {
         return c;
     }
 
-    /** 写临时配置文件并加载 */
+    /** 把 k=v 行解析成配置(等价于旧配置文件字段, 不落盘) */
     private static Config cfg(String... lines) throws IOException {
-        Path f = Files.createTempFile("xzpk-v3-selftest-", ".properties");
-        try {
-            StringBuilder sb = new StringBuilder();
-            for (String line : lines) {
-                sb.append(line).append('\n');
-            }
-            Files.write(f, sb.toString().getBytes(StandardCharsets.UTF_8));
-            return Config.load(f);
-        } finally {
-            Files.deleteIfExists(f);
+        StringBuilder sb = new StringBuilder();
+        for (String line : lines) {
+            sb.append(line).append('\n');
         }
+        Properties p = new Properties();
+        try {
+            p.load(new java.io.StringReader(sb.toString()));
+        } catch (IOException e) {
+            throw new IllegalStateException("测试配置解析失败", e);
+        }
+        return Config.fromProperties(p);
     }
 
     private static void check(boolean cond, String msg) {

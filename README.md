@@ -4,14 +4,14 @@
 
 ## 版本
 
-- **[V3（推荐，规范重写版）→ 见 [v3/README.md](v3/README.md)](v3/README.md)**
-  统一的 Java 工程：`grid`（对齐网格）与 `sliding`（滑动窗口）两种模式，
-  配置文件驱动，多线程，支持 CSV/TXT 导出，内置暴力法自检。
-  运行：`v3\run.bat`。
+- **[V3（当前推荐，图形界面版）→ 见 [v3/README.md](v3/README.md)**](v3/README.md)
+  统一 Java 工程，`grid`（铺格）与 `sliding`（滑动窗口）两种模式，参数在界面手动填写
+  （无隐藏默认值），多线程、结果只保留最多/最少各 topK 条，判定公式与游戏官方一致。
+  运行：`v3\gui.bat`（双击）。
 
-- 旧版（历史参考，V3 已覆盖其能力）：
-  - `src/slimepk.java`（旧命令行版，对齐网格）
-  - `src/skimepk2.java`（滑动窗口重写版，参数硬编码）
+- 旧版（历史参考）：
+  - `src/slimepk.java`（旧命令行版，全程 long 公式，大坐标会算错，仅供对照）
+  - `src/skimepk2.java`（滑动窗口重写版）
 
 ## 介绍文章
 

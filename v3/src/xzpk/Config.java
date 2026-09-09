@@ -1,31 +1,22 @@
 package xzpk;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Properties;
 
 /**
- * 程序配置。
+ * 程序配置（纯内存模型，由 GUI 输入直接构建，不再读配置文件）。
  *
- * <p>两种构造方式：
- * <ul>
- *   <li>{@link #load(Path)}：从 UTF-8 properties 文件读取（Main 命令行用）；</li>
- *   <li>{@link Builder}：代码内直接构建（GUI 用），缺省项使用内置默认值。</li>
- * </ul>
- * 两种方式共用同一套校验规则。</p>
+ * <p>GUI 路径要求 seed / 范围 / windowSize / topK 全部<b>显式填写</b>，
+ * 不提供隐藏默认值；只有 skip、bandCols、线程数、原点等引擎参数保留合理内置值。</p>
+ *
+ * <p>{@link #fromProperties(Properties)} 仅为自检工具：把键值对解析成配置并换算单位。</p>
  */
 public final class Config {
 
     /** 计算模式 */
     public enum Mode {
-        /** 铺格：从范围左上角(最小坐标)起按窗口大小铺互不重叠的完整格子 */
+        /** 铺格：窗口从范围左上角起每隔 windowSize 铺一格(互不重叠)，允许向右/下溢出 */
         GRID,
-        /** 滑动窗口：窗口起点逐区块（或按 skip）滑动，可覆盖任意位置（新版 skimepk2 思路） */
+        /** 滑动窗口：范围内每个区块都可作锚点(可 skip 抽样)，允许向右/下溢出 */
         SLIDING
     }
 
@@ -36,9 +27,6 @@ public final class Config {
         /** 方块坐标（游戏 F3 显示的坐标），内部自动 ÷16 换算成区块 */
         BLOCK
     }
-
-    /** 与旧版一致的默认世界种子 */
-    public static final long DEFAULT_SEED = 2950649267509295309L;
 
     /** 方块坐标 → 所在区块坐标（向下取整，负数也正确） */
     public static long chunkFromBlock(long block) {
@@ -61,12 +49,11 @@ public final class Config {
     private final int threads;
     private final String outFile;
     private final boolean showProgress;
-    private final Path source;
 
     private Config(Mode mode, CoordUnit coordUnit, long seed, long minChunkX, long maxChunkX,
                    long minChunkZ, long maxChunkZ, int windowSize, int skip,
                    int bandCols, int topK, long originX, long originZ,
-                   int threads, String outFile, boolean showProgress, Path source) {
+                   int threads, String outFile, boolean showProgress) {
         this.mode = mode;
         this.coordUnit = coordUnit;
         this.seed = seed;
@@ -83,156 +70,43 @@ public final class Config {
         this.threads = threads;
         this.outFile = outFile;
         this.showProgress = showProgress;
-        this.source = source;
     }
 
     /**
-     * 从指定路径读取配置。文件不存在时抛出带提示的异常。
-     *
-     * @param file 配置文件路径
-     * @return 校验通过的配置
-     */
-    public static Config load(Path file) {
-        if (file == null || !Files.exists(file)) {
-            throw new IllegalArgumentException("找不到配置文件: " + file
-                    + "\n  请把 config.properties 放在运行目录, 或使用: java xzpk.Main <配置文件>");
-        }
-        Properties p = new Properties();
-        try (InputStream in = Files.newInputStream(file);
-             InputStreamReader reader = new InputStreamReader(in, StandardCharsets.UTF_8)) {
-            p.load(reader);
-        } catch (IOException e) {
-            throw new IllegalArgumentException("读取配置文件失败: " + file + " (" + e.getMessage() + ")", e);
-        }
-
-        Builder b = new Builder().source(file);
-
-        String modeRaw = p.getProperty("mode", "sliding").trim().toLowerCase();
-        if (modeRaw.equals("grid")) {
-            b.mode(Mode.GRID);
-        } else if (modeRaw.equals("sliding")) {
-            b.mode(Mode.SLIDING);
-        } else {
-            throw new IllegalArgumentException("配置项 mode 无效: \"" + modeRaw + "\" (可选: grid / sliding)");
-        }
-
-        // ---- 世界种子 ----
-        if (p.containsKey("seed")) {
-            b.seed(parseLong("seed", p.getProperty("seed").trim()));
-        }
-
-        // ---- 坐标输入单位 (默认: 区块) ----
-        String unitRaw = p.getProperty("coordUnit", "chunk").trim().toLowerCase();
-        CoordUnit unit;
-        if (unitRaw.equals("chunk")) {
-            unit = CoordUnit.CHUNK;
-        } else if (unitRaw.equals("block") || unitRaw.equals("blocks")) {
-            unit = CoordUnit.BLOCK;
-        } else {
-            throw new IllegalArgumentException(
-                    "配置项 coordUnit 无效: \"" + unitRaw + "\" (可选: chunk / block)");
-        }
-        b.coordUnit(unit);
-
-        // ---- 范围(按所选单位解析, block 时 ÷16 换算成区块) ----
-        long rawMinX = p.containsKey("minChunkX") ? parseInt("minChunkX", p.getProperty("minChunkX").trim()) : -600;
-        long rawMaxX = p.containsKey("maxChunkX") ? parseInt("maxChunkX", p.getProperty("maxChunkX").trim()) : 600;
-        long rawMinZ = p.containsKey("minChunkZ") ? parseInt("minChunkZ", p.getProperty("minChunkZ").trim()) : -600;
-        long rawMaxZ = p.containsKey("maxChunkZ") ? parseInt("maxChunkZ", p.getProperty("maxChunkZ").trim()) : 600;
-        if (rawMinX > rawMaxX) {
-            throw new IllegalArgumentException("范围非法: minChunkX(" + rawMinX + ") 不能大于 maxChunkX(" + rawMaxX + ")");
-        }
-        if (rawMinZ > rawMaxZ) {
-            throw new IllegalArgumentException("范围非法: minChunkZ(" + rawMinZ + ") 不能大于 maxChunkZ(" + rawMaxZ + ")");
-        }
-        long minX = unit == CoordUnit.BLOCK ? chunkFromBlock(rawMinX) : rawMinX;
-        long maxX = unit == CoordUnit.BLOCK ? chunkFromBlock(rawMaxX) : rawMaxX;
-        long minZ = unit == CoordUnit.BLOCK ? chunkFromBlock(rawMinZ) : rawMinZ;
-        long maxZ = unit == CoordUnit.BLOCK ? chunkFromBlock(rawMaxZ) : rawMaxZ;
-        b.minChunkX(minX).maxChunkX(maxX).minChunkZ(minZ).maxChunkZ(maxZ);
-        // windowSize 缺省: 8 (grid/sliding 一致)
-        if (p.containsKey("windowSize")) {
-            b.windowSize(parseInt("windowSize", p.getProperty("windowSize").trim()));
-        }
-        if (p.containsKey("skip")) {
-            b.skip(parseInt("skip", p.getProperty("skip").trim()));
-        }
-        if (p.containsKey("bandCols")) {
-            b.bandCols(parseInt("bandCols", p.getProperty("bandCols").trim()));
-        }
-        if (p.containsKey("topK")) {
-            b.topK(parseInt("topK", p.getProperty("topK").trim()));
-        }
-        if (p.containsKey("originX")) {
-            long raw = parseInt("originX", p.getProperty("originX").trim());
-            b.originX(unit == CoordUnit.BLOCK ? chunkFromBlock(raw) : raw);
-        }
-        if (p.containsKey("originZ")) {
-            long raw = parseInt("originZ", p.getProperty("originZ").trim());
-            b.originZ(unit == CoordUnit.BLOCK ? chunkFromBlock(raw) : raw);
-        }
-        if (p.containsKey("threads")) {
-            b.threads(parseInt("threads", p.getProperty("threads").trim()));
-        }
-        if (p.containsKey("showProgress")) {
-            b.showProgress(Boolean.parseBoolean(p.getProperty("showProgress").trim()));
-        }
-        b.outFile(p.getProperty("outFile", "").trim());
-        return b.build();
-    }
-
-    private static int parseInt(String key, String raw) {
-        try {
-            return Integer.parseInt(raw);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("配置项 " + key + " 不是合法整数: \"" + raw + "\"");
-        }
-    }
-
-    private static long parseLong(String key, String raw) {
-        try {
-            return Long.parseLong(raw);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("配置项 " + key + " 不是合法长整数: \"" + raw + "\"");
-        }
-    }
-
-    /**
-     * 配置构造器。未显式设置的项使用内置默认值；
-     * windowSize 不设置时默认 8（grid / sliding 一致）。
+     * 配置构造器。seed / 范围 / windowSize / topK 为 GUI 必填项（无内置默认）；
+     * skip、bandCols、origin、threads、outFile、showProgress 等引擎参数有内置默认。
      */
     public static final class Builder {
         private Mode mode;
         private CoordUnit coordUnit = CoordUnit.CHUNK;
-        private long seed = DEFAULT_SEED;
-        private long minChunkX = -600;
-        private long maxChunkX = 600;
-        private long minChunkZ = -600;
-        private long maxChunkZ = 600;
-        private int windowSize;
+        private Long seed;
+        private Long minChunkX;
+        private Long maxChunkX;
+        private Long minChunkZ;
+        private Long maxChunkZ;
+        private Integer windowSize;
         private int skip = 1;
         private int bandCols = 4096;
-        private int topK = 100;
+        private Integer topK;
         private long originX;
         private long originZ;
         private int threads;
         private String outFile = "";
         private boolean showProgress = true;
-        private Path source;
 
         public Builder mode(Mode mode) {
             this.mode = mode;
             return this;
         }
 
-        /** 范围/原点坐标的输入单位(默认区块; 方块时由调用方自行换算, 此字段仅记录单位) */
+        /** 范围/原点坐标的输入单位(仅记录用于提示; 换算由 GUI/解析端负责) */
         public Builder coordUnit(CoordUnit v) {
             this.coordUnit = v == null ? CoordUnit.CHUNK : v;
             return this;
         }
 
-        public Builder seed(long seed) {
-            this.seed = seed;
+        public Builder seed(long v) {
+            this.seed = v;
             return this;
         }
 
@@ -256,7 +130,7 @@ public final class Config {
             return this;
         }
 
-        /** 窗口边长(区块)；0 或未设置 = 按模式默认 */
+        /** 窗口边长(区块)，必填（GUI 不填会先报错） */
         public Builder windowSize(int v) {
             this.windowSize = v;
             return this;
@@ -272,6 +146,7 @@ public final class Config {
             return this;
         }
 
+        /** 最多/最少各保留条数，必填 */
         public Builder topK(int v) {
             this.topK = v;
             return this;
@@ -303,31 +178,37 @@ public final class Config {
             return this;
         }
 
-        public Builder source(Path v) {
-            this.source = v;
-            return this;
-        }
-
-        /** 校验并构建（与文件读取共用同一套规则） */
+        /** 校验并构建（GUI 与自检共用同一套规则） */
         public Config build() {
             if (mode == null) {
-                throw new IllegalArgumentException("未指定计算模式 (mode = grid / sliding)");
+                throw new IllegalArgumentException("请选择计算模式 (grid / sliding)");
             }
-            int ws = windowSize > 0 ? windowSize : 8;
+            if (seed == null) {
+                throw new IllegalArgumentException("请填写世界种子");
+            }
+            if (minChunkX == null || maxChunkX == null || minChunkZ == null || maxChunkZ == null) {
+                throw new IllegalArgumentException("请填写扫描范围(起点与终点 x/z)");
+            }
+            if (windowSize == null) {
+                throw new IllegalArgumentException("请填写窗口大小(区块)");
+            }
+            if (topK == null) {
+                throw new IllegalArgumentException("请填写输出条数 topK");
+            }
+            int ws = windowSize;
 
             if (minChunkX > maxChunkX) {
                 throw new IllegalArgumentException(
-                        "范围非法: minChunkX(" + minChunkX + ") 不能大于 maxChunkX(" + maxChunkX + ")");
+                        "x 方向范围非法: 起点 x(" + minChunkX + ") 不能大于终点 x(" + maxChunkX + ")");
             }
             if (minChunkZ > maxChunkZ) {
                 throw new IllegalArgumentException(
-                        "范围非法: minChunkZ(" + minChunkZ + ") 不能大于 maxChunkZ(" + maxChunkZ + ")");
+                        "z 方向范围非法: 起点 z(" + minChunkZ + ") 不能大于终点 z(" + maxChunkZ + ")");
             }
             if (ws < 1) {
                 throw new IllegalArgumentException("windowSize 必须 >= 1 (当前: " + ws + ")");
             }
             if (mode == Mode.SLIDING) {
-                // 溢出语义: 窗口只要求左上角锚点区块在范围内, 允许越过范围边缘, 故不限制 ws 与范围宽度
                 if (skip < 1) {
                     throw new IllegalArgumentException("skip 必须 >= 1 (当前: " + skip + ")");
                 }
@@ -354,39 +235,89 @@ public final class Config {
             }
 
             return new Config(mode, coordUnit, seed, minChunkX, maxChunkX, minChunkZ, maxChunkZ,
-                    ws, skip, bandCols, topK, originX, originZ, threads, outFile,
-                    showProgress, source);
+                    ws, skip, bandCols, topK, originX, originZ, threads, outFile, showProgress);
         }
     }
 
-    /** 计算后实际使用的线程数（0 = 自动 = CPU 核数） */
-    public int effectiveThreads() {
-        return threads > 0 ? threads : Math.max(1, Runtime.getRuntime().availableProcessors());
-    }
+    // ---- 自检用：把键值对(来自测试字符串)解析成配置 ----
 
-    public void printSummary(PrintStream out) {
-        String modeName = mode == Mode.GRID ? "grid(从角点铺格)" : "sliding(滑动窗口)";
-        out.println("配置文件: " + (source != null ? source.toAbsolutePath() : "(GUI/内存配置)"));
-        out.println("模式: " + modeName);
-        out.println("世界种子: " + seed);
-        out.println("窗口大小: " + windowSize + "x" + windowSize + " 区块");
-        out.println("坐标输入单位: " + (coordUnit == CoordUnit.BLOCK ? "block(方块坐标, 已自动÷16换算)" : "chunk(区块坐标)"));
-        out.println("扫描范围(区块,含端点): X[" + minChunkX + ", " + maxChunkX
-                + "] Z[" + minChunkZ + ", " + maxChunkZ + "]");
-        out.println("扫描范围(世界方块): X[" + (minChunkX * 16L) + ", " + ((maxChunkX + 1) * 16L - 1)
-                + "] Z[" + (minChunkZ * 16L) + ", " + ((maxChunkZ + 1) * 16L - 1) + "]");
-        if (mode == Mode.SLIDING) {
-            out.println("滑动步长 skip: " + skip + (skip == 1 ? "(全覆盖)" : ""));
-            out.println("X 方向分片列数 bandCols: " + bandCols);
-            out.println("原点(用于距离排序): 区块(" + originX + ", " + originZ + ")");
+    /**
+     * 从键值对解析配置(自检工具用)。与旧配置文件字段同名；coordUnit=block 时范围/原点自动 ÷16。
+     * 缺省项: 模式=sliding, 单位=chunk, 范围=±600, 窗口=8, topK=100, 引擎参数取 Builder 默认。
+     */
+    static Config fromProperties(Properties p) {
+        Builder b = new Builder();
+        String modeRaw = p.getProperty("mode", "sliding").trim().toLowerCase();
+        if (modeRaw.equals("grid")) {
+            b.mode(Mode.GRID);
+        } else if (modeRaw.equals("sliding")) {
+            b.mode(Mode.SLIDING);
         } else {
-            out.println("锚点规则: 从范围左上角起每隔 windowSize 铺一格(互不重叠)");
+            throw new IllegalArgumentException("配置项 mode 无效: \"" + modeRaw + "\" (可选: grid / sliding)");
         }
-        out.println("溢出规则: 窗口只要求左上角锚点区块在范围内, 可向右/下越过范围边缘, 超出部分照常统计");
-        out.println("输出条数 topK: " + topK + " (最多/最少各 " + topK + " 条)");
-        out.println("线程数: " + effectiveThreads());
-        out.println("进度条: " + showProgress);
-        out.println("导出文件: " + (outFile.isEmpty() ? "(无, 仅控制台)" : outFile));
+        String unitRaw = p.getProperty("coordUnit", "chunk").trim().toLowerCase();
+        CoordUnit unit;
+        if (unitRaw.equals("chunk")) {
+            unit = CoordUnit.CHUNK;
+        } else if (unitRaw.equals("block") || unitRaw.equals("blocks")) {
+            unit = CoordUnit.BLOCK;
+        } else {
+            throw new IllegalArgumentException("配置项 coordUnit 无效: \"" + unitRaw + "\" (可选: chunk / block)");
+        }
+        b.coordUnit(unit);
+
+        long rawMinX = parseLong(p, "minChunkX", -600);
+        long rawMaxX = parseLong(p, "maxChunkX", 600);
+        long rawMinZ = parseLong(p, "minChunkZ", -600);
+        long rawMaxZ = parseLong(p, "maxChunkZ", 600);
+        if (rawMinX > rawMaxX) {
+            throw new IllegalArgumentException("范围非法: minChunkX(" + rawMinX + ") 不能大于 maxChunkX(" + rawMaxX + ")");
+        }
+        if (rawMinZ > rawMaxZ) {
+            throw new IllegalArgumentException("范围非法: minChunkZ(" + rawMinZ + ") 不能大于 maxChunkZ(" + rawMaxZ + ")");
+        }
+        b.minChunkX(unit == CoordUnit.BLOCK ? chunkFromBlock(rawMinX) : rawMinX)
+                .maxChunkX(unit == CoordUnit.BLOCK ? chunkFromBlock(rawMaxX) : rawMaxX)
+                .minChunkZ(unit == CoordUnit.BLOCK ? chunkFromBlock(rawMinZ) : rawMinZ)
+                .maxChunkZ(unit == CoordUnit.BLOCK ? chunkFromBlock(rawMaxZ) : rawMaxZ);
+        b.seed(p.containsKey("seed") ? parseLong(p, "seed", 0) : 2950649267509295309L);
+        b.windowSize((int) parseLong(p, "windowSize", 8));
+        if (p.containsKey("skip")) {
+            b.skip((int) parseLong(p, "skip", 1));
+        }
+        if (p.containsKey("bandCols")) {
+            b.bandCols((int) parseLong(p, "bandCols", 4096));
+        }
+        b.topK((int) parseLong(p, "topK", 100));
+        if (p.containsKey("originX")) {
+            long raw = parseLong(p, "originX", 0);
+            b.originX(unit == CoordUnit.BLOCK ? chunkFromBlock(raw) : raw);
+        }
+        if (p.containsKey("originZ")) {
+            long raw = parseLong(p, "originZ", 0);
+            b.originZ(unit == CoordUnit.BLOCK ? chunkFromBlock(raw) : raw);
+        }
+        if (p.containsKey("threads")) {
+            b.threads((int) parseLong(p, "threads", 0));
+        }
+        if (p.containsKey("showProgress")) {
+            b.showProgress(Boolean.parseBoolean(p.getProperty("showProgress").trim()));
+        }
+        if (p.containsKey("outFile")) {
+            b.outFile(p.getProperty("outFile", "").trim());
+        }
+        return b.build();
+    }
+
+    private static long parseLong(Properties p, String key, long fallback) {
+        if (!p.containsKey(key)) {
+            return fallback;
+        }
+        try {
+            return Long.parseLong(p.getProperty(key).trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("配置项 " + key + " 不是合法整数: \"" + p.getProperty(key) + "\"");
+        }
     }
 
     // ---- getters ----
@@ -406,5 +337,9 @@ public final class Config {
     public int threads() { return threads; }
     public String outFile() { return outFile; }
     public boolean showProgress() { return showProgress; }
-    public Path source() { return source; }
+
+    /** 计算后实际使用的线程数（0 = 自动 = CPU 核数） */
+    public int effectiveThreads() {
+        return threads > 0 ? threads : Math.max(1, Runtime.getRuntime().availableProcessors());
+    }
 }
