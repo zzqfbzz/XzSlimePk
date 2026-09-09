@@ -8,11 +8,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 对齐网格扫描器（对应旧版 slimepk 思路）。
+ * 铺格(grid)扫描器（对应旧版 slimepk 思路）。
  *
- * <p>把扫描范围按 windowSize 对齐成互不重叠的方块：方块起点 X/Z 均为
- * windowSize 的整数倍，且要求方块<b>完全落在</b>用户给定的范围内
- * （含端点的区块坐标），超出范围的半截方块不计入。</p>
+ * <p>把扫描范围按 windowSize 铺成<b>互不重叠</b>的方块，窗口从范围的
+ * <b>左上角(最小坐标)</b>开始：起点 = 范围最小坐标 + k×windowSize，
+ * 只统计<b>完全落在</b>范围内的整块（尾部不足一块的丢弃）。
+ * 例：范围区块 0~100、窗口 8 → 窗口 (0,0)~(7,7)、(8,0)~(15,7)…</p>
  *
  * <p>并行方式：把全部方块按批次动态分发给线程池里的 worker，
  * 每个 worker 用本地 Top-K 收集器，结束时再合并，降低锁竞争。</p>
@@ -30,19 +31,21 @@ public final class GridScanner {
      */
     public static ScanResult scan(Config cfg) {
         long w = cfg.windowSize();
-        long firstX = ceilMul(cfg.minChunkX(), w);
-        long lastX = floorMul(cfg.maxChunkX() - w + 1L, w);
-        long firstZ = ceilMul(cfg.minChunkZ(), w);
-        long lastZ = floorMul(cfg.maxChunkZ() - w + 1L, w);
+        long minX = cfg.minChunkX();
+        long maxX = cfg.maxChunkX();
+        long minZ = cfg.minChunkZ();
+        long maxZ = cfg.maxChunkZ();
 
-        if (firstX > lastX || firstZ > lastZ) {
-            throw new IllegalArgumentException("范围内放不下任何完整的 " + w + "x" + w
-                    + " 对齐块。grid 的窗口起点必须在区块坐标的 " + w + " 整数倍上、且整块落在范围内"
-                    + "(换算后范围每个方向至少要有 " + (2 * w - 1) + " 个区块宽并包含一个对齐起点)。"
-                    + "若只想在范围内\"任意摆放\"找最优位置, 请改用 sliding 模式。");
+        long spanX = maxX - minX + 1L;
+        long spanZ = maxZ - minZ + 1L;
+        if (spanX < w || spanZ < w) {
+            throw new IllegalArgumentException("范围内放不下任何 " + w + "x" + w + " 的窗口:"
+                    + " 每个方向至少需要 " + w + " 个区块(" + (w * 16L) + " 格)宽"
+                    + "(当前范围 " + spanX + "x" + spanZ + " 区块)。请缩小 windowSize 或扩大扫描范围。");
         }
-        long nX = (lastX - firstX) / w + 1L;
-        long nZ = (lastZ - firstZ) / w + 1L;
+        // 从范围左上角起每隔 w 铺一个窗口; 只保留完全落在范围内的整块
+        long nX = (spanX - w) / w + 1L;
+        long nZ = (spanZ - w) / w + 1L;
         long total = Math.multiplyExact(nX, nZ);
 
         final int threads = cfg.effectiveThreads();
@@ -80,8 +83,8 @@ public final class GridScanner {
                 for (long idx = base; idx < end; idx++) {
                     long ix = idx % nX;
                     long iz = idx / nX;
-                    long sx = firstX + ix * w;
-                    long sz = firstZ + iz * w;
+                    long sx = minX + ix * w;
+                    long sz = minZ + iz * w;
                     int count = countBlock(seed, sx, sz, window);
                     localMost.offer(count, (int) sx, (int) sz);
                     localLeast.offer(count, (int) sx, (int) sz);
@@ -131,20 +134,5 @@ public final class GridScanner {
             }
         }
         return count;
-    }
-
-    /** 最小的 >= a 的 b 的倍数 */
-    static long ceilMul(long a, long b) {
-        return ceilDiv(a, b) * b;
-    }
-
-    /** 最大的 <= a 的 b 的倍数 */
-    static long floorMul(long a, long b) {
-        return Math.floorDiv(a, b) * b;
-    }
-
-    /** 向上取整除法(对负数也正确) */
-    static long ceilDiv(long a, long b) {
-        return -Math.floorDiv(-a, b);
     }
 }

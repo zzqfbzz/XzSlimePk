@@ -35,7 +35,7 @@ public final class Gui extends JFrame {
     private static final long DEFAULT_RANGE_BLOCK = 9600L; // = ±600 区块
 
     private final JComboBox<String> modeBox =
-            new JComboBox<>(new String[]{"sliding(滑动窗口, 推荐)", "grid(对齐网格)"});
+            new JComboBox<>(new String[]{"sliding(滑动窗口, 推荐)", "grid(从角点铺格)"});
     private final JComboBox<String> unitBox =
             new JComboBox<>(new String[]{"方块坐标(游戏F3)", "区块坐标"});
     private final JTextField seedField = new JTextField(String.valueOf(Config.DEFAULT_SEED), 24);
@@ -77,8 +77,9 @@ public final class Gui extends JFrame {
         inputs.add(flowRow(new JLabel("窗口大小(区块):"), windowField,
                 new JLabel("  输出条数 topK:"), topKField));
         inputs.add(flowRow(makeHint(
-                "推荐 sliding(窗口可任意摆放找最优); grid 需范围能放下完整对齐块。"
-                        + "窗口大小填区块数, 如 8(=128×128格); 输出 X,Z=起点区块, x,z=起点方块坐标")));
+                "推荐 sliding(窗口可任意摆放找最优); grid 从范围左上角起铺互不重叠的格子"
+                        + "(输入 0,0 则第一块就是 0,0~7,7)。窗口大小填区块数, 如 8(=128×128格); "
+                        + "输出 X,Z=起点区块, x,z=起点方块坐标")));
 
         // ---- 输出区 ----
         outputArea.setEditable(false);
@@ -143,7 +144,7 @@ public final class Gui extends JFrame {
             @Override
             protected Void doInBackground() {
                 publish("== 开始扫描 ==\n"
-                        + "模式: " + (cfg.mode() == Config.Mode.GRID ? "grid(对齐网格)" : "sliding(滑动窗口)")
+                        + "模式: " + (cfg.mode() == Config.Mode.GRID ? "grid(从角点铺格)" : "sliding(滑动窗口)")
                         + " | 坐标单位: " + (cfg.coordUnit() == Config.CoordUnit.BLOCK ? "方块" : "区块")
                         + " | 种子: " + cfg.seed()
                         + " | 窗口: " + cfg.windowSize() + "x" + cfg.windowSize() + " 区块"

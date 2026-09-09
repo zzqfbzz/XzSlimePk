@@ -95,7 +95,7 @@ public final class Selftest {
     // ================ 暴力对照 ================
 
     private static void testGridVsBrute() throws IOException {
-        // 范围含负数且不整除, 考验对齐与越界处理
+        // 范围含负数且不整除, 考验从角点铺格与越界处理
         Config cfg = cfg("mode=grid", "seed=999",
                 "minChunkX=-13", "maxChunkX=12",
                 "minChunkZ=-10", "maxChunkZ=15",
@@ -103,25 +103,37 @@ public final class Selftest {
                 "originX=0", "originZ=0", "showProgress=false");
         ScanResult scan = GridScanner.scan(cfg);
 
+        // 暴力对照: 窗口从范围左上角(最小坐标)起, 每隔 windowSize 铺一块, 只保留整块
         List<ResultItem> brute = new ArrayList<>();
         long hits = 0;
-        for (long sx = -13; sx <= 12 - 4 + 1; sx++) {
-            if (Math.floorMod(sx, 4) != 0) {
-                continue;
-            }
-            for (long sz = -10; sz <= 15 - 4 + 1; sz++) {
-                if (Math.floorMod(sz, 4) != 0) {
-                    continue;
-                }
+        boolean firstTileFound = false;
+        for (long sx = -13; sx + 4 - 1 <= 12; sx += 4) {
+            for (long sz = -10; sz + 4 - 1 <= 15; sz += 4) {
                 int c = countBlock(999L, sx, sz, 4);
                 brute.add(ResultItem.of(c, (int) sx, (int) sz, 0, 0));
                 hits += c;
+                if (sx == -13 && sz == -10) {
+                    firstTileFound = true;
+                }
             }
         }
+        check(firstTileFound, "grid 暴力对照里没有角点第一块");
         check(scan.totalWindows == brute.size(), "grid 窗口总数不符: " + scan.totalWindows + " vs " + brute.size());
         check(scan.slimeHits == hits, "grid 命中总数不符: " + scan.slimeHits + " vs " + hits);
         assertSameSets("grid", scan, brute, brute);
-        System.out.println("[OK] grid 与暴力法一致(窗口 " + brute.size() + " 个)");
+        // 第一块必须是范围角点 (-13,-10) 那块
+        check(containsChunk(scan.mostRaw, -13, -10) || containsChunk(scan.leastRaw, -13, -10),
+                "grid 结果里没有从角点开始的第一个窗口");
+        System.out.println("[OK] grid 与暴力法一致(窗口 " + brute.size() + " 个, 第一块=角点)");
+    }
+
+    private static boolean containsChunk(List<ResultItem> items, int cx, int cz) {
+        for (ResultItem item : items) {
+            if (item.chunkX == cx && item.chunkZ == cz) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void testSlidingVsBrute() throws IOException {

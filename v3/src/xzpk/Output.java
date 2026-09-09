@@ -69,7 +69,7 @@ public final class Output {
 
         line(sw, "");
         line(sw, "=== 统计信息 ===");
-        line(sw, "模式: " + (cfg.mode() == Config.Mode.GRID ? "grid(对齐网格)" : "sliding(滑动窗口)"));
+        line(sw, "模式: " + (cfg.mode() == Config.Mode.GRID ? "grid(从角点铺格)" : "sliding(滑动窗口)"));
         line(sw, "世界种子: " + cfg.seed());
         line(sw, "窗口大小: " + w + "x" + w + " 区块");
         line(sw, "扫描范围(区块,含端点): X[" + cfg.minChunkX() + ", " + cfg.maxChunkX()

@@ -23,7 +23,7 @@ public final class Config {
 
     /** 计算模式 */
     public enum Mode {
-        /** 对齐网格：范围按窗口大小对齐成互不重叠的完整方块（旧版 slimepk 思路） */
+        /** 铺格：从范围左上角(最小坐标)起按窗口大小铺互不重叠的完整格子 */
         GRID,
         /** 滑动窗口：窗口起点逐区块（或按 skip）滑动，可覆盖任意位置（新版 skimepk2 思路） */
         SLIDING
@@ -370,7 +370,7 @@ public final class Config {
     }
 
     public void printSummary(PrintStream out) {
-        String modeName = mode == Mode.GRID ? "grid(对齐网格)" : "sliding(滑动窗口)";
+        String modeName = mode == Mode.GRID ? "grid(从角点铺格)" : "sliding(滑动窗口)";
         out.println("配置文件: " + (source != null ? source.toAbsolutePath() : "(GUI/内存配置)"));
         out.println("模式: " + modeName);
         out.println("世界种子: " + seed);
@@ -385,7 +385,7 @@ public final class Config {
             out.println("X 方向分片列数 bandCols: " + bandCols);
             out.println("原点(用于距离排序): 区块(" + originX + ", " + originZ + ")");
         } else {
-            out.println("对齐方式: 方块起点为 windowSize 的整数倍, 且完全落在范围内");
+            out.println("对齐方式: 窗口从范围左上角起按 windowSize 铺互不重叠的格子, 只统计完整落在范围内的整块");
         }
         out.println("输出条数 topK: " + topK + " (最多/最少各 " + topK + " 条)");
         out.println("线程数: " + effectiveThreads());
