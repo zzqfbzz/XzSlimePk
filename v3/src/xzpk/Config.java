@@ -212,7 +212,7 @@ public final class Config {
         private int windowSize;
         private int skip = 1;
         private int bandCols = 4096;
-        private int topK = 50;
+        private int topK = 100;
         private long originX;
         private long originZ;
         private int threads;

@@ -44,7 +44,7 @@ public final class Gui extends JFrame {
     private final JTextField minZField = new JTextField(String.valueOf(-DEFAULT_RANGE_BLOCK), 8);
     private final JTextField maxZField = new JTextField(String.valueOf(DEFAULT_RANGE_BLOCK), 8);
     private final JTextField windowField = new JTextField(4);
-    private final JTextField topKField = new JTextField("50", 5);
+    private final JTextField topKField = new JTextField("100", 5);
     private final JButton startButton = new JButton("开始扫描");
     private final JButton clearButton = new JButton("清空输出");
     private final JTextArea outputArea = new JTextArea();

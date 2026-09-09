@@ -60,14 +60,14 @@ GUI 基础版只暴露常用参数（模式 / 种子 / X·Z 范围 / 窗口大�
 
 | 键 | 默认 | 说明 |
 |---|---|---|
-| `mode` | `sliding` | `grid`=对齐网格 / `sliding`=滑动窗口 |
+| `mode` | `sliding` | `grid`=从角点铺格 / `sliding`=滑动窗口 |
 | `coordUnit` | `chunk` | `chunk`=范围按区块坐标填 / `block`=按方块坐标填(游戏 F3 坐标)，自动 ÷16 换算成区块 |
 | `seed` | `2950649267509295309` | 世界种子 |
 | `minChunkX/maxChunkX/minChunkZ/maxChunkZ` | ±600 | 扫描范围（按 `coordUnit` 单位，**含端点**；窗口大小永远按区块数填） |
 | `windowSize` | 8 | 窗口边长（区块）；8=单个玩家加载的最大区域（=128×128 格） |
 | `skip` | 1 | sliding：窗口起点步进，1=全覆盖 |
 | `bandCols` | 4096 | sliding：X 方向分片窗口起点列数 |
-| `topK` | 50 | 最多/最少各输出条数 |
+| `topK` | 100 | 最多/最少各保留条数（逐条与当前列表比较后插入，不保存全部窗口） |
 | `originX/originZ` | 0 | 并列排序“距原点近→远”的原点（按 `coordUnit` 单位） |
 | `threads` | 0 | 0=自动（CPU 核数） |
 | `outFile` | 空 | 导出路径；`.csv`→CSV(带BOM)，否则 TXT |
@@ -86,7 +86,7 @@ maxChunkX=100
 minChunkZ=-100
 maxChunkZ=100
 windowSize=8        # 8×8 区块
-topK=50
+topK=100            # 最多/最少各保留 100 条
 ```
 
 程序会自动把方块范围 ÷16 换算成区块（-100~100 → 区块 -7~6）再扫描，
