@@ -45,8 +45,8 @@ public final class Gui extends JFrame {
     private final JTextField maxXField = new JTextField(9);
     private final JTextField minZField = new JTextField(9);
     private final JTextField maxZField = new JTextField(9);
-    private final JTextField windowField = new JTextField(4);
-    private final JTextField topKField = new JTextField(5);
+    private final JTextField windowField = new JTextField("8", 4);
+    private final JTextField topKField = new JTextField("50", 5);
     private final JButton startButton = new JButton("开始扫描");
     private final JButton exportButton = new JButton("导出为 TXT");
     private final JButton clearButton = new JButton("清空输出");
@@ -62,10 +62,10 @@ public final class Gui extends JFrame {
         pack();
         Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
         setLocation((screen.width - getWidth()) / 2, Math.max(60, (screen.height - getHeight()) / 3));
-        windowField.setToolTipText("必填: 区块数, 如 8(单个玩家加载上限, =128×128格)");
+        windowField.setToolTipText("窗口大小(区块), 默认 8(单个玩家加载上限, =128×128格), 可改");
         unitBox.setToolTipText("范围/原点填什么单位: 方块坐标会按 ÷16 自动换算成区块");
         seedField.setToolTipText("游戏里 /seed 显示的世界种子");
-        topKField.setToolTipText("最多/最少各保留多少条, 如 100");
+        topKField.setToolTipText("最多/最少各保留多少条, 默认 50, 可改");
     }
 
     private void buildUi() {
@@ -83,8 +83,8 @@ public final class Gui extends JFrame {
         inputs.add(flowRow(new JLabel("窗口大小(区块):"), windowField,
                 new JLabel("  输出条数 topK:"), topKField));
         inputs.add(flowRow(makeHint(
-                "所有参数都需手动填写。推荐 sliding(任意摆放找最优); 种子=游戏 /seed; 范围填两个角点"
-                        + "坐标(单位按上方选择); 窗口大小填区块数(8=128×128格); topK=各保留条数")));
+                "种子与范围需手动填写; 窗口默认 8(区块), topK 默认 50, 可改。推荐 sliding(任意摆放找最优); "
+                        + "范围填两个角点坐标(单位按上方选择)")));
 
         // ---- 输出区 ----
         outputArea.setEditable(false);
