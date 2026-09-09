@@ -125,18 +125,22 @@ sliding 使用滑窗增量算法：纵向环形缓冲 + 列和，横向 O(1) 滚
 “最多的”按 数量降序 → 距原点近→远 → Z升 → X升；
 “最少的”按 数量升序 → 距原点近→远 → Z升 → X升。
 
-## 判定公式与旧版兼容性
+## 判定公式（按 Minecraft 官方源码语义）
 
-与旧版 `slimepk.java` **完全一致**（长整型运算，与 Chunkbase 等主流工具的语义相同）：
+依据 [Minecraft Wiki](https://minecraft.wiki/w/Slime) 的判定代码（Java 版），
+各坐标项先按 **32 位 int 运算**（溢出回绕），再与世界种子相加，最后异或掩码：
 
 ```java
-hash = seed + chunkX²·0x4c1906 + chunkX·0x5ac0db + chunkZ²·0x4307a7 + chunkZ·0x5f24f
-hash ^= 0x3ad8025f
-new Random(hash).nextInt(10) == 0   → 史莱姆区块(理论概率 10%)
+hash = seed + (int)(chunkX*chunkX*0x4c1906) + (int)(chunkX*0x5ac0db)
+             + (int)(chunkZ*chunkZ)*0x4307a7L + (int)(chunkZ*0x5f24f);
+hash ^= 0x3ad8025fL;
+new Random(hash).nextInt(10) == 0   → 史莱姆区块（概率 10%）
 ```
 
-注意：旧版 `skimepk2.java` 部分乘法为 int 运算，在 |区块坐标| > 20 左右会因
-int 溢出而偏离真实判定，V3 不沿用该写法（自检中已验证小坐标下与之一致）。
+注意：旧版 `slimepk.java` 用的是**全程 long** 写法，区块坐标超过约 ±20 就会和真实游戏
+不一致（例：种子 `-2870327070709450083`，窗口西北角方块 `(93696,-192)`，即区块
+`X 5856~5863, Z -12~-5`：long 写法数出 24 个，官方写法只有 **11 个**）。
+V3 采用官方写法，该窗口已作为自检回归用例。
 
 ## 自检覆盖
 

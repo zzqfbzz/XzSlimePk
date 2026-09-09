@@ -40,24 +40,48 @@ public final class Selftest {
 
     private static void testFormulaParity() {
         Random rnd = new Random(42);
-        long[] seeds = {2950649267509295309L, 1L, -999L, 123456789012345L};
-        for (long s : seeds) {
-            for (int i = 0; i < 20_000; i++) {
-                int cx = rnd.nextInt(4_000_001) - 2_000_000;
-                int cz = rnd.nextInt(4_000_001) - 2_000_000;
-                boolean v3 = SlimeChunk.isSlimeChunk(s, cx, cz);
-                check(v3 == SlimeChunk.legacySlimepk1(s, cx, cz),
-                        "V3 与旧版 slimepk 公式不一致 seed=" + s + " 区块(" + cx + "," + cz + ")");
-            }
+        // 与 Minecraft Wiki 官方写法一致(大坐标也要一致, 含 32 位溢出)
+        for (int i = 0; i < 40_000; i++) {
+            int cx = rnd.nextInt(4_000_001) - 2_000_000;
+            int cz = rnd.nextInt(4_000_001) - 2_000_000;
+            check(SlimeChunk.isSlimeChunk(123456789L, cx, cz) == wikiSnippet(123456789L, cx, cz),
+                    "V3 与 Wiki 官方写法不一致 区块(" + cx + "," + cz + ")");
         }
-        // 旧版 skimepk2 的部分乘法是 int 运算, 只有坐标足够小时不溢出、与 V3 一致
+        // 小坐标(±20 内, 各乘项不溢出)时, 两种旧版写法也应与官方一致
         for (int cx = -20; cx <= 20; cx++) {
             for (int cz = -20; cz <= 20; cz++) {
-                check(SlimeChunk.isSlimeChunk(12345L, cx, cz) == SlimeChunk.legacySkimepk2(12345L, cx, cz),
-                        "V3 与旧版 skimepk2 公式不一致(小坐标) 区块(" + cx + "," + cz + ")");
+                boolean v3 = SlimeChunk.isSlimeChunk(12345L, cx, cz);
+                check(v3 == SlimeChunk.legacyLongMath(12345L, cx, cz),
+                        "小坐标与旧版 slimepk(全程long)不一致 区块(" + cx + "," + cz + ")");
+                check(v3 == SlimeChunk.legacySkimepk2(12345L, cx, cz),
+                        "小坐标与旧版 skimepk2 不一致 区块(" + cx + "," + cz + ")");
             }
         }
-        System.out.println("[OK] 公式与旧版一致");
+        // 回归: 用户报告窗口 种子 -2870327070709450083, NW 方块(93696,-192) → 区块 X5856~5863 Z-12~-5, 官方应为 11
+        int cnt = 0;
+        for (int x = 5856; x <= 5863; x++) {
+            for (int z = -12; z <= -5; z++) {
+                if (SlimeChunk.isSlimeChunk(-2870327070709450083L, x, z)) {
+                    cnt++;
+                }
+            }
+        }
+        check(cnt == 11, "用户窗口官方语义应为 11 个史莱姆区块, 实际 " + cnt);
+        System.out.println("[OK] 公式与 Wiki 官方写法一致(含回归窗口=11)");
+    }
+
+    /** Minecraft Wiki 上的官方判定代码(逐字抄录, 用于对照) */
+    private static boolean wikiSnippet(long seed, int chunkX, int chunkZ) {
+        Random rnd = new Random(
+                (
+                        seed
+                                + (int) (chunkX * chunkX * 0x4c1906)
+                                + (int) (chunkX * 0x5ac0db)
+                                + (int) (chunkZ * chunkZ) * 0x4307a7L
+                                + (int) (chunkZ * 0x5f24f)
+                ) ^ 0x3ad8025fL
+        );
+        return rnd.nextInt(10) == 0;
     }
 
     // ================ 坐标单位换算 ================
