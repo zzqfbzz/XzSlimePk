@@ -35,7 +35,7 @@ public final class Gui extends JFrame {
     private static final long DEFAULT_RANGE_BLOCK = 9600L; // = ±600 区块
 
     private final JComboBox<String> modeBox =
-            new JComboBox<>(new String[]{"grid(对齐网格)", "sliding(滑动窗口)"});
+            new JComboBox<>(new String[]{"sliding(滑动窗口, 推荐)", "grid(对齐网格)"});
     private final JComboBox<String> unitBox =
             new JComboBox<>(new String[]{"方块坐标(游戏F3)", "区块坐标"});
     private final JTextField seedField = new JTextField(String.valueOf(Config.DEFAULT_SEED), 24);
@@ -77,8 +77,8 @@ public final class Gui extends JFrame {
         inputs.add(flowRow(new JLabel("窗口大小(区块):"), windowField,
                 new JLabel("  输出条数 topK:"), topKField));
         inputs.add(flowRow(makeHint(
-                "用法: 在\"大范围\"里找 8×8 区块(=128×128格) 的史莱姆区块最多/最少的小区域。"
-                        + "范围按所选单位填, 窗口大小永远填区块数(如 8); 输出里 X,Z=起点区块, x,z=起点世界方块坐标")));
+                "推荐 sliding(窗口可任意摆放找最优); grid 需范围能放下完整对齐块。"
+                        + "窗口大小填区块数, 如 8(=128×128格); 输出 X,Z=起点区块, x,z=起点方块坐标")));
 
         // ---- 输出区 ----
         outputArea.setEditable(false);
@@ -207,7 +207,7 @@ public final class Gui extends JFrame {
         long maxZ = block ? Config.chunkFromBlock(rawMaxZ) : rawMaxZ;
 
         Config.Builder b = new Config.Builder()
-                .mode(modeBox.getSelectedIndex() == 1 ? Config.Mode.SLIDING : Config.Mode.GRID)
+                .mode(modeBox.getSelectedIndex() == 0 ? Config.Mode.SLIDING : Config.Mode.GRID)
                 .coordUnit(block ? Config.CoordUnit.BLOCK : Config.CoordUnit.CHUNK)
                 .seed(parseLong(seedField, "世界种子"))
                 .minChunkX(minX)

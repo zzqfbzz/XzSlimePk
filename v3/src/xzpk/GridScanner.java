@@ -37,7 +37,9 @@ public final class GridScanner {
 
         if (firstX > lastX || firstZ > lastZ) {
             throw new IllegalArgumentException("范围内放不下任何完整的 " + w + "x" + w
-                    + " 对齐块。请缩小 windowSize 或扩大扫描范围。");
+                    + " 对齐块。grid 的窗口起点必须在区块坐标的 " + w + " 整数倍上、且整块落在范围内"
+                    + "(换算后范围每个方向至少要有 " + (2 * w - 1) + " 个区块宽并包含一个对齐起点)。"
+                    + "若只想在范围内\"任意摆放\"找最优位置, 请改用 sliding 模式。");
         }
         long nX = (lastX - firstX) / w + 1L;
         long nZ = (lastZ - firstZ) / w + 1L;
