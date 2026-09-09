@@ -71,8 +71,9 @@ public final class Gui extends JFrame {
         inputs.add(flowRow(new JLabel("计算模式:"), modeBox,
                 new JLabel("  坐标单位:"), unitBox,
                 new JLabel("    世界种子:"), seedField));
-        inputs.add(flowRow(new JLabel("X 范围: "), minXField, new JLabel(" ~ "), maxXField,
-                new JLabel("     Z 范围: "), minZField, new JLabel(" ~ "), maxZField));
+        inputs.add(flowRow(new JLabel("范围(两个角点):"),
+                new JLabel("起点 x="), minXField, new JLabel("z="), minZField,
+                new JLabel("    终点 x="), maxXField, new JLabel("z="), maxZField));
         inputs.add(flowRow(new JLabel("窗口大小(区块):"), windowField,
                 new JLabel("  输出条数 topK:"), topKField));
         inputs.add(flowRow(makeHint(
@@ -189,15 +190,15 @@ public final class Gui extends JFrame {
     private Config readConfig() {
         boolean block = unitBox.getSelectedIndex() == 0; // 0=方块, 1=区块
 
-        long rawMinX = parseLong(minXField, "X 范围最小值");
-        long rawMaxX = parseLong(maxXField, "X 范围最大值");
-        long rawMinZ = parseLong(minZField, "Z 范围最小值");
-        long rawMaxZ = parseLong(maxZField, "Z 范围最大值");
+        long rawMinX = parseLong(minXField, "起点 x 坐标");
+        long rawMaxX = parseLong(maxXField, "终点 x 坐标");
+        long rawMinZ = parseLong(minZField, "起点 z 坐标");
+        long rawMaxZ = parseLong(maxZField, "终点 z 坐标");
         if (rawMinX > rawMaxX) {
-            throw new IllegalArgumentException("X 范围非法: 最小值 " + rawMinX + " 不能大于最大值 " + rawMaxX);
+            throw new IllegalArgumentException("x 方向范围非法: 起点 x(" + rawMinX + ") 不能大于终点 x(" + rawMaxX + ")");
         }
         if (rawMinZ > rawMaxZ) {
-            throw new IllegalArgumentException("Z 范围非法: 最小值 " + rawMinZ + " 不能大于最大值 " + rawMaxZ);
+            throw new IllegalArgumentException("z 方向范围非法: 起点 z(" + rawMinZ + ") 不能大于终点 z(" + rawMaxZ + ")");
         }
 
         long minX = block ? Config.chunkFromBlock(rawMinX) : rawMinX;
