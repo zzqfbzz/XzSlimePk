@@ -150,7 +150,7 @@ public final class Config {
         long minZ = unit == CoordUnit.BLOCK ? chunkFromBlock(rawMinZ) : rawMinZ;
         long maxZ = unit == CoordUnit.BLOCK ? chunkFromBlock(rawMaxZ) : rawMaxZ;
         b.minChunkX(minX).maxChunkX(maxX).minChunkZ(minZ).maxChunkZ(maxZ);
-        // windowSize 缺省: 由 build() 按模式自动决定(grid=8 / sliding=12)
+        // windowSize 缺省: 8 (grid/sliding 一致)
         if (p.containsKey("windowSize")) {
             b.windowSize(parseInt("windowSize", p.getProperty("windowSize").trim()));
         }
@@ -199,7 +199,7 @@ public final class Config {
 
     /**
      * 配置构造器。未显式设置的项使用内置默认值；
-     * windowSize 不设置时按模式自动决定（grid=8 / sliding=12）。
+     * windowSize 不设置时默认 8（grid / sliding 一致）。
      */
     public static final class Builder {
         private Mode mode;
@@ -313,7 +313,7 @@ public final class Config {
             if (mode == null) {
                 throw new IllegalArgumentException("未指定计算模式 (mode = grid / sliding)");
             }
-            int ws = windowSize > 0 ? windowSize : (mode == Mode.GRID ? 8 : 12);
+            int ws = windowSize > 0 ? windowSize : 8;
 
             if (minChunkX > maxChunkX) {
                 throw new IllegalArgumentException(

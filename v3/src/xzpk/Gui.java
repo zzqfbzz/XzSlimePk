@@ -58,7 +58,7 @@ public final class Gui extends JFrame {
         pack();
         Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
         setLocation((screen.width - getWidth()) / 2, Math.max(60, (screen.height - getHeight()) / 3));
-        windowField.setToolTipText("切换模式会自动填入默认值(grid=8, sliding=12), 可直接修改");
+        windowField.setToolTipText("默认 8(单个玩家加载上限), 可直接修改");
         unitBox.setToolTipText("范围/原点填什么单位: 方块坐标会按 ÷16 自动换算成区块");
     }
 
@@ -109,10 +109,10 @@ public final class Gui extends JFrame {
         fillWindowDefaultIfBlank();
     }
 
-    /** 窗口大小留空时按当前模式填入默认值: grid=8, sliding=12 */
+    /** 窗口大小留空时填入默认值 8(单个玩家加载的最大区域) */
     private void fillWindowDefaultIfBlank() {
         if (windowField.getText().trim().isEmpty()) {
-            windowField.setText(modeBox.getSelectedIndex() == 1 ? "12" : "8");
+            windowField.setText("8");
         }
     }
 
